@@ -30,9 +30,11 @@ Build an iOS SwiftUI app that runs entirely on-device with no server dependency.
 - Completion persistence and next-session navigation.
 - Bundled copy of the current `data.json`.
 
-## Later Enhancements
+## Implemented After First Commit
 - Per-set checkoff and actual reps input.
 - Rest countdown timer between sets.
+
+## Later Enhancements
 - Retest flow between phase changes.
 - Calendar/streak view.
 - Reset and export local history.

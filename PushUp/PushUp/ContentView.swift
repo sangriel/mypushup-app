@@ -62,6 +62,13 @@ private struct DashboardView: View {
     @Bindable var state: AppState
     let completions: [WorkoutCompletion]
 
+    @State private var completedSetIndexes: Set<Int> = []
+    @State private var setInputs: [Int: String] = [:]
+    @State private var remainingRestSeconds = 0
+    @State private var isResting = false
+
+    private let restTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
     var body: some View {
         List {
             if let session {
@@ -72,6 +79,7 @@ private struct DashboardView: View {
 
                         if let sets = selectedSets(for: session) {
                             setsView(sets: sets, restSeconds: session.day.restSeconds)
+                            restTimerView()
                             completeButton(for: session, sets: sets)
                         }
                     }
@@ -96,6 +104,9 @@ private struct DashboardView: View {
                             Text("\(completion.rangeKey) · \(completion.targetRepsCSV)")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                            Text("실제 수행: \(completion.actualRepsCSV)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             Text(completion.completedAt, style: .date)
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
@@ -109,6 +120,12 @@ private struct DashboardView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 8)
+        }
+        .onChange(of: session) { _, _ in
+            resetSetProgress()
+        }
+        .onReceive(restTimer) { _ in
+            tickRestTimer()
         }
     }
 
@@ -149,14 +166,29 @@ private struct DashboardView: View {
     private func setsView(sets: RoutineSets, restSeconds: Int) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(sets.targets.enumerated()), id: \.offset) { index, target in
-                HStack {
-                    Text("Set \(index + 1)")
-                        .font(.headline)
-                    Spacer()
-                    Text(target.displayText)
-                        .font(.title3.monospacedDigit().bold())
-                    Text("회")
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Button {
+                            toggleSet(index: index, target: target, restSeconds: restSeconds)
+                        } label: {
+                            Image(systemName: completedSetIndexes.contains(index) ? "checkmark.circle.fill" : "circle")
+                                .font(.title2)
+                        }
+                        .buttonStyle(.plain)
+
+                        Text("Set \(index + 1)")
+                            .font(.headline)
+
+                        Spacer()
+
+                        Text("목표 \(target.displayText)회")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    TextField("실제 횟수", text: setInputBinding(index: index, target: target))
+                        .keyboardType(.numberPad)
+                        .textFieldStyle(.roundedBorder)
                 }
                 .padding()
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
@@ -168,6 +200,26 @@ private struct DashboardView: View {
         }
     }
 
+    @ViewBuilder
+    private func restTimerView() -> some View {
+        if isResting {
+            HStack {
+                Label("휴식 \(remainingRestSeconds)초", systemImage: "timer")
+                    .font(.headline.monospacedDigit())
+
+                Spacer()
+
+                Button("건너뛰기") {
+                    remainingRestSeconds = 0
+                    isResting = false
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding()
+            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+        }
+    }
+
     private func completeButton(for session: RoutineSession, sets: RoutineSets) -> some View {
         Button {
             complete(session: session, sets: sets)
@@ -176,7 +228,7 @@ private struct DashboardView: View {
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
-        .disabled(isCompleted(session))
+        .disabled(isCompleted(session) || !allSetsCompleted)
     }
 
     private func rangeBinding(for session: RoutineSession) -> Binding<String> {
@@ -207,13 +259,17 @@ private struct DashboardView: View {
     private func complete(session: RoutineSession, sets: RoutineSets) {
         let rangeKey = selectedRangeKey(for: session)
         let targetReps = sets.targets.map(\.displayText).joined(separator: ", ")
+        let actualReps = sets.targets.indices.map {
+            normalizedSetInput(index: $0, target: sets.targets[$0])
+        }.joined(separator: ", ")
 
         modelContext.insert(
             WorkoutCompletion(
                 week: session.week,
                 day: session.day.day,
                 rangeKey: rangeKey,
-                targetRepsCSV: targetReps
+                targetRepsCSV: targetReps,
+                actualRepsCSV: actualReps
             )
         )
 
@@ -225,12 +281,66 @@ private struct DashboardView: View {
         }
 
         try? modelContext.save()
+        resetSetProgress()
     }
 
     private func isCompleted(_ session: RoutineSession) -> Bool {
         completions.contains {
             $0.week == session.week && $0.day == session.day.day
         }
+    }
+
+    private var allSetsCompleted: Bool {
+        completedSetIndexes.count == 5
+    }
+
+    private func toggleSet(index: Int, target: SetTarget, restSeconds: Int) {
+        if completedSetIndexes.contains(index) {
+            completedSetIndexes.remove(index)
+            return
+        }
+
+        setInputs[index] = normalizedSetInput(index: index, target: target)
+        completedSetIndexes.insert(index)
+
+        if index < 4 {
+            remainingRestSeconds = restSeconds
+            isResting = true
+        }
+    }
+
+    private func setInputBinding(index: Int, target: SetTarget) -> Binding<String> {
+        Binding(
+            get: {
+                setInputs[index, default: "\(target.minimumReps)"]
+            },
+            set: { newValue in
+                setInputs[index] = newValue.filter(\.isNumber)
+            }
+        )
+    }
+
+    private func normalizedSetInput(index: Int, target: SetTarget) -> String {
+        let value = setInputs[index, default: "\(target.minimumReps)"]
+        return value.isEmpty ? "\(target.minimumReps)" : value
+    }
+
+    private func tickRestTimer() {
+        guard isResting else { return }
+
+        if remainingRestSeconds > 1 {
+            remainingRestSeconds -= 1
+        } else {
+            remainingRestSeconds = 0
+            isResting = false
+        }
+    }
+
+    private func resetSetProgress() {
+        completedSetIndexes.removeAll()
+        setInputs.removeAll()
+        remainingRestSeconds = 0
+        isResting = false
     }
 }
 

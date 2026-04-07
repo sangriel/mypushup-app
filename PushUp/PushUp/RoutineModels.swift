@@ -133,6 +133,7 @@ final class WorkoutCompletion {
     var day: Int
     var rangeKey: String
     var targetRepsCSV: String
+    var actualRepsCSV: String
     var completedAt: Date
 
     init(
@@ -141,6 +142,7 @@ final class WorkoutCompletion {
         day: Int,
         rangeKey: String,
         targetRepsCSV: String,
+        actualRepsCSV: String,
         completedAt: Date = .now
     ) {
         self.id = id
@@ -148,6 +150,7 @@ final class WorkoutCompletion {
         self.day = day
         self.rangeKey = rangeKey
         self.targetRepsCSV = targetRepsCSV
+        self.actualRepsCSV = actualRepsCSV
         self.completedAt = completedAt
     }
 }
