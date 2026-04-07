@@ -375,7 +375,7 @@ private struct WorkoutDetailView: View {
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
-        .disabled(isCompleted(session) || !allSetsCompleted)
+        .disabled(isCompleted(session) || !allSetsCompleted(for: sets))
     }
 
     private func rangeBinding(for session: RoutineSession) -> Binding<String> {
@@ -447,8 +447,8 @@ private struct WorkoutDetailView: View {
         state.currentWeek == session.week && state.currentDay == session.day.day
     }
 
-    private var allSetsCompleted: Bool {
-        completedSetIndexes.count == 5
+    private func allSetsCompleted(for sets: RoutineSets) -> Bool {
+        completedSetIndexes.count == sets.targets.count
     }
 
     private func toggleSet(index: Int, target: SetTarget, restSeconds: Int) {

@@ -27,14 +27,36 @@ struct RoutineDay: Decodable, Identifiable, Hashable {
 }
 
 struct RoutineSets: Decodable, Hashable {
-    let set1: SetTarget
-    let set2: SetTarget
-    let set3: SetTarget
-    let set4: SetTarget
-    let set5: SetTarget
+    let targets: [SetTarget]
 
-    var targets: [SetTarget] {
-        [set1, set2, set3, set4, set5]
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicSetKey.self)
+        let orderedKeys = container.allKeys.sorted { $0.setNumber < $1.setNumber }
+        targets = try orderedKeys.map { try container.decode(SetTarget.self, forKey: $0) }
+    }
+}
+
+private struct DynamicSetKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    var setNumber: Int {
+        guard stringValue.hasPrefix("set"),
+              let number = Int(stringValue.dropFirst(3)) else {
+            return Int.max
+        }
+
+        return number
+    }
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        intValue = nil
+    }
+
+    init?(intValue: Int) {
+        stringValue = "\(intValue)"
+        self.intValue = intValue
     }
 }
 
