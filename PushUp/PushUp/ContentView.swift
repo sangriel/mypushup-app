@@ -58,6 +58,7 @@ struct ContentView: View {
 }
 
 private struct RoutineSelectionView: View {
+    @Environment(\.modelContext) private var modelContext
     let weeks: [RoutineWeek]
     @Bindable var state: AppState
     let completions: [WorkoutCompletion]
@@ -98,6 +99,11 @@ private struct RoutineSelectionView: View {
                 Section("최근 완료 기록") {
                     ForEach(completions.prefix(5)) { completion in
                         completionRow(completion)
+                            .swipeActions {
+                                Button("삭제", role: .destructive) {
+                                    deleteCompletion(completion)
+                                }
+                            }
                     }
                 }
             }
@@ -136,12 +142,23 @@ private struct RoutineSelectionView: View {
     }
 
     private func completionRow(_ completion: WorkoutCompletion) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Week \(completion.week) · Day \(completion.day)")
-                .font(.headline)
-            Text("\(completion.rangeKey) · 실제 수행 \(completion.actualRepsCSV)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Week \(completion.week) · Day \(completion.day)")
+                    .font(.headline)
+                Text("\(completion.rangeKey) · 실제 수행 \(completion.actualRepsCSV)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button(role: .destructive) {
+                deleteCompletion(completion)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
         }
     }
 
@@ -149,6 +166,11 @@ private struct RoutineSelectionView: View {
         completions.contains {
             $0.week == session.week && $0.day == session.day.day
         }
+    }
+
+    private func deleteCompletion(_ completion: WorkoutCompletion) {
+        modelContext.delete(completion)
+        try? modelContext.save()
     }
 }
 
@@ -186,19 +208,12 @@ private struct WorkoutDetailView: View {
             if !completions.isEmpty {
                 Section("최근 완료 기록") {
                     ForEach(completions.prefix(8)) { completion in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Week \(completion.week) · Day \(completion.day)")
-                                .font(.headline)
-                            Text("\(completion.rangeKey) · \(completion.targetRepsCSV)")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Text("실제 수행: \(completion.actualRepsCSV)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(completion.completedAt, style: .date)
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
+                        completionRow(completion)
+                            .swipeActions {
+                                Button("삭제", role: .destructive) {
+                                    deleteCompletion(completion)
+                                }
+                            }
                     }
                 }
             }
@@ -325,6 +340,33 @@ private struct WorkoutDetailView: View {
         .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
     }
 
+    private func completionRow(_ completion: WorkoutCompletion) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Week \(completion.week) · Day \(completion.day)")
+                    .font(.headline)
+                Text("\(completion.rangeKey) · \(completion.targetRepsCSV)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text("실제 수행: \(completion.actualRepsCSV)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(completion.completedAt, style: .date)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer()
+
+            Button(role: .destructive) {
+                deleteCompletion(completion)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
     private func completeButton(for session: RoutineSession, sets: RoutineSets) -> some View {
         Button {
             complete(session: session, sets: sets)
@@ -388,6 +430,11 @@ private struct WorkoutDetailView: View {
 
         try? modelContext.save()
         resetSetProgress()
+    }
+
+    private func deleteCompletion(_ completion: WorkoutCompletion) {
+        modelContext.delete(completion)
+        try? modelContext.save()
     }
 
     private func isCompleted(_ session: RoutineSession) -> Bool {
