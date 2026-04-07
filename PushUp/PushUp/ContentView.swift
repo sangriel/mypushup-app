@@ -197,7 +197,6 @@ private struct WorkoutDetailView: View {
                     rangePicker(for: session)
 
                     if let sets = selectedSets(for: session) {
-                        restTimerView(restSeconds: session.day.restSeconds)
                         setsView(sets: sets, restSeconds: session.day.restSeconds)
                         completeButton(for: session, sets: sets)
                     }
@@ -219,10 +218,7 @@ private struct WorkoutDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            Text("모든 데이터는 이 기기에만 저장됩니다.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 8)
+            stickyRestTimerInset(restSeconds: session.day.restSeconds)
         }
         .onReceive(restTimer) { _ in
             tickRestTimer()
@@ -303,7 +299,7 @@ private struct WorkoutDetailView: View {
     }
 
     @ViewBuilder
-    private func restTimerView(restSeconds: Int) -> some View {
+    private func stickyRestTimerInset(restSeconds: Int) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("세트 사이 휴식 타이머", systemImage: "timer")
@@ -335,9 +331,15 @@ private struct WorkoutDetailView: View {
             Text("세트를 완료하면 다음 세트 전 휴식 타이머가 자동으로 시작됩니다.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+
+            Text("모든 데이터는 이 기기에만 저장됩니다.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .padding()
-        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .padding(.horizontal)
+        .padding(.top, 8)
     }
 
     private func completionRow(_ completion: WorkoutCompletion) -> some View {
