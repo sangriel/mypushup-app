@@ -1,0 +1,23 @@
+# Xcode user-specific state
+**/xcuserdata/
+*.xcuserstate
+
+# Build products
+DerivedData/
+build/
+.build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# macOS
+.DS_Store
+
+# Swift Package Manager local state
+.swiftpm/
+
+# Fastlane output, if added later
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
