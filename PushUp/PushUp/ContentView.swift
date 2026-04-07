@@ -22,7 +22,7 @@ struct ContentView: View {
                 } else if weeks.isEmpty {
                     ProgressView("루틴을 불러오는 중...")
                 } else if let state = appStates.first {
-                    DashboardView(
+                    RoutineSelectionView(
                         weeks: weeks,
                         state: state,
                         completions: completions
@@ -57,8 +57,104 @@ struct ContentView: View {
     }
 }
 
-private struct DashboardView: View {
+private struct RoutineSelectionView: View {
+    let weeks: [RoutineWeek]
+    @Bindable var state: AppState
+    let completions: [WorkoutCompletion]
+
+    @State private var selectedWeek: Int = 1
+
+    var body: some View {
+        List {
+            Section("주차 선택") {
+                Picker("주차", selection: $selectedWeek) {
+                    ForEach(weeks) { week in
+                        Text("\(week.week)주차").tag(week.week)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            if let week = weeks.first(where: { $0.week == selectedWeek }) {
+                Section("\(week.week)주차 날짜 선택") {
+                    ForEach(week.days.sorted { $0.day < $1.day }) { day in
+                        let session = RoutineSession(week: week.week, day: day)
+
+                        NavigationLink {
+                            WorkoutDetailView(
+                                session: session,
+                                weeks: weeks,
+                                state: state,
+                                completions: completions
+                            )
+                        } label: {
+                            dayRow(for: session)
+                        }
+                    }
+                }
+            }
+
+            if !completions.isEmpty {
+                Section("최근 완료 기록") {
+                    ForEach(completions.prefix(5)) { completion in
+                        completionRow(completion)
+                    }
+                }
+            }
+        }
+        .navigationTitle("PushUp")
+        .onAppear {
+            if weeks.contains(where: { $0.week == state.currentWeek }) {
+                selectedWeek = state.currentWeek
+            } else {
+                selectedWeek = weeks.first?.week ?? 1
+            }
+        }
+    }
+
+    private func dayRow(for session: RoutineSession) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: isCompleted(session) ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(isCompleted(session) ? .green : .secondary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Day \(session.day.day)")
+                    .font(.headline)
+                Text("휴식 \(session.day.restSeconds)초 · 범위 \(session.day.ranges.orderedRangeKeys.joined(separator: ", "))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if state.currentWeek == session.week && state.currentDay == session.day.day {
+                Text("현재")
+                    .font(.caption.bold())
+                    .foregroundStyle(.blue)
+            }
+        }
+    }
+
+    private func completionRow(_ completion: WorkoutCompletion) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Week \(completion.week) · Day \(completion.day)")
+                .font(.headline)
+            Text("\(completion.rangeKey) · 실제 수행 \(completion.actualRepsCSV)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func isCompleted(_ session: RoutineSession) -> Bool {
+        completions.contains {
+            $0.week == session.week && $0.day == session.day.day
+        }
+    }
+}
+
+private struct WorkoutDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    let session: RoutineSession
     let weeks: [RoutineWeek]
     @Bindable var state: AppState
     let completions: [WorkoutCompletion]
@@ -73,28 +169,18 @@ private struct DashboardView: View {
 
     var body: some View {
         List {
-            if let session {
-                Section {
-                    VStack(alignment: .leading, spacing: 16) {
-                        header(for: session)
-                        rangePicker(for: session)
+            Section {
+                VStack(alignment: .leading, spacing: 16) {
+                    header(for: session)
+                    rangePicker(for: session)
 
-                        if let sets = selectedSets(for: session) {
-                            setsView(sets: sets, restSeconds: session.day.restSeconds)
-                            restTimerView()
-                            completeButton(for: session, sets: sets)
-                        }
+                    if let sets = selectedSets(for: session) {
+                        setsView(sets: sets, restSeconds: session.day.restSeconds)
+                        restTimerView()
+                        completeButton(for: session, sets: sets)
                     }
-                    .padding(.vertical, 6)
                 }
-            } else {
-                Section {
-                    ContentUnavailableView(
-                        "모든 루틴 완료",
-                        systemImage: "checkmark.seal",
-                        description: Text("6주 프로그램의 마지막 세션까지 완료했습니다.")
-                    )
-                }
+                .padding(.vertical, 6)
             }
 
             if !completions.isEmpty {
@@ -123,9 +209,6 @@ private struct DashboardView: View {
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 8)
         }
-        .onChange(of: session) { _, _ in
-            resetSetProgress()
-        }
         .onReceive(restTimer) { _ in
             tickRestTimer()
         }
@@ -140,23 +223,13 @@ private struct DashboardView: View {
                 }
             }
         }
-    }
-
-    private var session: RoutineSession? {
-        guard let currentSession = weeks.session(week: state.currentWeek, day: state.currentDay) ?? weeks.firstSession() else {
-            return nil
-        }
-
-        if isCompleted(currentSession) {
-            return weeks.nextSession(after: currentSession)
-        }
-
-        return currentSession
+        .navigationTitle("Week \(session.week) · Day \(session.day.day)")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func header(for session: RoutineSession) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("오늘의 루틴")
+            Text("선택한 루틴")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text("Week \(session.week), Day \(session.day.day)")
@@ -238,7 +311,7 @@ private struct DashboardView: View {
         Button {
             complete(session: session, sets: sets)
         } label: {
-            Label("오늘 루틴 완료", systemImage: "checkmark.circle.fill")
+            Label("루틴 완료", systemImage: "checkmark.circle.fill")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
@@ -289,7 +362,8 @@ private struct DashboardView: View {
 
         state.selectedRangeKey = rangeKey
 
-        if let nextSession = weeks.nextSession(after: session) {
+        if isCurrentProgress(session),
+           let nextSession = weeks.nextSession(after: session) {
             state.currentWeek = nextSession.week
             state.currentDay = nextSession.day.day
         }
@@ -302,6 +376,10 @@ private struct DashboardView: View {
         completions.contains {
             $0.week == session.week && $0.day == session.day.day
         }
+    }
+
+    private func isCurrentProgress(_ session: RoutineSession) -> Bool {
+        state.currentWeek == session.week && state.currentDay == session.day.day
     }
 
     private var allSetsCompleted: Bool {
