@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+internal import Combine
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -66,6 +67,7 @@ private struct DashboardView: View {
     @State private var setInputs: [Int: String] = [:]
     @State private var remainingRestSeconds = 0
     @State private var isResting = false
+    @FocusState private var focusedSetIndex: Int?
 
     private let restTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -126,6 +128,17 @@ private struct DashboardView: View {
         }
         .onReceive(restTimer) { _ in
             tickRestTimer()
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(KeyboardDismissTapInstaller { dismissKeyboard() })
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+
+                Button("Done") {
+                    dismissKeyboard()
+                }
+            }
         }
     }
 
@@ -189,6 +202,7 @@ private struct DashboardView: View {
                     TextField("실제 횟수", text: setInputBinding(index: index, target: target))
                         .keyboardType(.numberPad)
                         .textFieldStyle(.roundedBorder)
+                        .focused($focusedSetIndex, equals: index)
                 }
                 .padding()
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
@@ -341,6 +355,11 @@ private struct DashboardView: View {
         setInputs.removeAll()
         remainingRestSeconds = 0
         isResting = false
+        dismissKeyboard()
+    }
+
+    private func dismissKeyboard() {
+        focusedSetIndex = nil
     }
 }
 
@@ -350,4 +369,76 @@ private struct DashboardView: View {
             AppState.self,
             WorkoutCompletion.self
         ], inMemory: true)
+}
+
+private struct KeyboardDismissTapInstaller: UIViewRepresentable {
+    let onTapOutsideTextInput: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onTapOutsideTextInput: onTapOutsideTextInput)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+
+        DispatchQueue.main.async {
+            context.coordinator.installIfNeeded(in: view.window)
+        }
+
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.onTapOutsideTextInput = onTapOutsideTextInput
+        context.coordinator.installIfNeeded(in: uiView.window)
+    }
+
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        coordinator.uninstall()
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var onTapOutsideTextInput: () -> Void
+        private weak var recognizer: UITapGestureRecognizer?
+
+        init(onTapOutsideTextInput: @escaping () -> Void) {
+            self.onTapOutsideTextInput = onTapOutsideTextInput
+        }
+
+        func installIfNeeded(in window: UIWindow?) {
+            guard recognizer == nil, let window else { return }
+
+            let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+            recognizer.cancelsTouchesInView = false
+            recognizer.delegate = self
+            window.addGestureRecognizer(recognizer)
+            self.recognizer = recognizer
+        }
+
+        func uninstall() {
+            if let recognizer {
+                recognizer.view?.removeGestureRecognizer(recognizer)
+            }
+            recognizer = nil
+        }
+
+        @objc private func handleTap() {
+            onTapOutsideTextInput()
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            var view: UIView? = touch.view
+
+            while let currentView = view {
+                if currentView is UITextField || currentView is UITextView {
+                    return false
+                }
+
+                view = currentView.superview
+            }
+
+            return true
+        }
+    }
 }
