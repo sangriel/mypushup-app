@@ -33,6 +33,7 @@ Build an iOS SwiftUI app that runs entirely on-device with no server dependency.
 ## Implemented After First Commit
 - Per-set checkoff and actual reps input.
 - Rest countdown timer between sets.
+- Detail screen rest timer card with manual start, pause, and reset controls.
 
 ## Later Enhancements
 - Retest flow between phase changes.

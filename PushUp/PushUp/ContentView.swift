@@ -175,8 +175,8 @@ private struct WorkoutDetailView: View {
                     rangePicker(for: session)
 
                     if let sets = selectedSets(for: session) {
+                        restTimerView(restSeconds: session.day.restSeconds)
                         setsView(sets: sets, restSeconds: session.day.restSeconds)
-                        restTimerView()
                         completeButton(for: session, sets: sets)
                     }
                 }
@@ -288,23 +288,41 @@ private struct WorkoutDetailView: View {
     }
 
     @ViewBuilder
-    private func restTimerView() -> some View {
-        if isResting {
+    private func restTimerView(restSeconds: Int) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("휴식 \(remainingRestSeconds)초", systemImage: "timer")
-                    .font(.headline.monospacedDigit())
+                Label("세트 사이 휴식 타이머", systemImage: "timer")
+                    .font(.headline)
 
                 Spacer()
 
-                Button("건너뛰기") {
-                    remainingRestSeconds = 0
-                    isResting = false
+                Text(isResting ? "진행 중" : "대기")
+                    .font(.caption.bold())
+                    .foregroundStyle(isResting ? .green : .secondary)
+            }
+
+            Text(timerDisplayText(restSeconds: restSeconds))
+                .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
+                .frame(maxWidth: .infinity, alignment: .center)
+
+            HStack {
+                Button(isResting ? "일시정지" : "시작") {
+                    toggleRestTimer(restSeconds: restSeconds)
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("리셋") {
+                    resetRestTimer(restSeconds: restSeconds)
                 }
                 .buttonStyle(.bordered)
             }
-            .padding()
-            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+
+            Text("세트를 완료하면 다음 세트 전 휴식 타이머가 자동으로 시작됩니다.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
+        .padding()
+        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func completeButton(for session: RoutineSession, sets: RoutineSets) -> some View {
@@ -426,6 +444,29 @@ private struct WorkoutDetailView: View {
             remainingRestSeconds = 0
             isResting = false
         }
+    }
+
+    private func timerDisplayText(restSeconds: Int) -> String {
+        let displaySeconds = remainingRestSeconds == 0 ? restSeconds : remainingRestSeconds
+        return "\(displaySeconds / 60):\(String(format: "%02d", displaySeconds % 60))"
+    }
+
+    private func toggleRestTimer(restSeconds: Int) {
+        if isResting {
+            isResting = false
+            return
+        }
+
+        if remainingRestSeconds == 0 {
+            remainingRestSeconds = restSeconds
+        }
+
+        isResting = true
+    }
+
+    private func resetRestTimer(restSeconds: Int) {
+        remainingRestSeconds = restSeconds
+        isResting = false
     }
 
     private func resetSetProgress() {
